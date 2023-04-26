@@ -11,11 +11,15 @@ sha2 ={version = "0.10.6", features = ["compress"]}
 thiserror = "1.0.40"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand = {version = "0.6.0"} #older version must be used for correct linking to CryptoRNG feature
-num-bigint = "0.4.3"
+rand = {version = "0.8.5"} #older version must be used for correct linking to CryptoRNG feature
+num-bigint = { version = "0.4.3", features = ["rand"] }
 num-traits = "0.2.15"
-secp256k1 ={ version = "0.27.0", features = ["rand", "rand-std", "bitcoin-hashes", "global-context", "bitcoin-hashes-std", "serde"] }
-secp256k1-sys = "0.8.1"
 serde_derive = "1.0.160"
-k256 = {version = "0.13.1", features = ["ecdsa-core", "arithmetic"]}
+k256 = { version = "0.13.1", features = ["ecdsa-core", "arithmetic", "hash2curve"] }
 lazy_static = "1.4.0"
+textnonce = "1.0.0"
+getrandom = "0.2.9"
+num-integer = "0.1.45"
+rug = "1.19.2"
+paillier-rs = "0.2.3"
+num-primes = "0.3.0"
