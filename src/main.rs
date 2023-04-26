@@ -1,38 +1,55 @@
-use gennaro_rs::{keygen::{Parameters, Party, keygen}, proj256_generator, signing::mta_protocol, PartyIndex};
-use k256::elliptic_curve::{Scalar, rand_core::OsRng, ProjectivePoint, Field};
+use gennaro_rs::{keygen::{Parameters, Party, keygen}, gen_nonce, signing::{*, self}, proj256_generator};
+use k256::elliptic_curve::{Scalar, rand_core::OsRng, ProjectivePoint};
 use num_bigint::{BigUint, BigInt};
 use paillier::{Paillier, KeyGeneration, Encrypt};
 use rand::Rng;
 use sha2::digest::HashMarker;
 
 fn main() {
-
-    let message = b"Hello, world!";
-
     // Define the parameters for the key generation process
-    let params = Parameters {
+    let parameters = Parameters {
         threshold: 3,
         num_parties: 5,
         paillier_modulus_bits: 2048,
     };
 
     // Create a list of parties
-
-    let mut parties = initialize_parties(params.num_parties);
+    let parties = vec![
+        Party {
+            index: 1,
+            public_key: None,
+            public_key_share: None,
+            encrypted_shared_secret: None,
+        },
+        Party {
+            index: 2,
+            public_key: None,
+            public_key_share: None,
+            encrypted_shared_secret: None,
+        },
+        Party {
+            index: 3,
+            public_key: None,
+            public_key_share: None,
+            encrypted_shared_secret: None,
+        },
+        Party {
+            index: 4,
+            public_key: None,
+            public_key_share: None,
+            encrypted_shared_secret: None,
+        },
+        Party {
+            index: 5,
+            public_key: None,
+            public_key_share: None,
+            encrypted_shared_secret: None,
+        },
+    ];
 
     // Run the key generation process
-    let keygen_result = keygen(params, &mut parties);
-
-    match keygen_result {
+    match keygen(parameters, parties) {
         Ok(final_state) => {
-            parties.iter().enumerate().for_each(|(i, party)| {
-                println!("Party {}:\n",party.index);
-                println!("Public key: {:?}",party.public_key);
-                println!("Public key share: {:?}", party.public_key_share);
-                println!("Paillier Encryption Key: {:?}",party.encryption_key);
-                println!("Paillier Decryption Key: {:?}",party.decryption_key);
-                println!("Party Secret Share: {:?}\n",party.secret_share);
-            });
             println!("Key generation successful!");
             println!("Shared secret: {:?}", final_state.shared_secret.value);
             println!("Public key: {:?}", final_state.public_key);
@@ -41,28 +58,39 @@ fn main() {
             println!("Key generation failed: {}", e);
         }
     }
+    println!("Signing Nonce: {:?}", gen_nonce());
+    let m2 = "Shh";
 
-    // Extract private key shares from parties
-    let private_key_shares = parties[1..3]
-    .iter()
-    .filter_map(|party| party.secret_share.as_ref())
-    .cloned()
-    .collect();
+    let alice = parties[0];
+    let bob = parties[1];
 
-// Call mta_protocol with the private key shares
-mta_protocol(private_key_shares);
+    let (alice_pk, alice_sk) = (alice.public_key_share.unwrap(), alice.encrypted_shared_secret.unwrap());
+    let (bob_pk, bob_sk) = (bob.public_key_share.unwrap(), bob.encrypted_shared_secret.unwrap());
 
-}
+    // Secret-shared values a_i (held by Pi) and b_j (held by Pj)
+    let a_i = alice_pk.into();
+    let b_j = bob_pk.into();
 
-fn initialize_parties(num_parties: usize) -> Vec<Party> {
-    (1..=num_parties as PartyIndex)
-        .map(|i| Party {
-            index: i,
-            public_key: None,
-            public_key_share: None,
-            secret_share: None,
-            encryption_key: None,
-            decryption_key: None,
-        })
-        .collect()
+    // For demonstration purposes, generate Paillier key pairs for Alice and Bob
+    let (alice_ek, alice_dk) = Paillier::keypair().keys();
+    let (bob_ek, _bob_dk) = Paillier::keypair().keys();
+
+    // Encrypt Alice and Bob's shared secrets with their respective Paillier public keys
+    let alice_enc_secret = Paillier::encrypt(&alice_ek, alice_sk.into());
+    let bob_enc_secret = Paillier::encrypt(&bob_ek, bob_sk.into());
+
+    // Run MtA protocol
+    //let a_i_times_b_j = mta_protocol(&alice_ek, &alice_enc_secret, &bob_pk.to_bigint().unwrap());
+    //println!("{:?}", a_i_times_b_j);
+
+    // For testing purposes, decrypt the result using Alice's secret key
+    //let decrypted_result = signing::decrypt_point(a_i_times_b_j, &Scalar::from(alice_sk.into()));
+    let beta_prime: u32 = OsRng.gen(); 
+
+    // Verify the result
+    //let actual_product = paillier::Mul::mul(&alice_sk, &paillier::EncodedCiphertext::from(alice_sk.into()), &paillier::EncodedCiphertext::from(b_j.into()));
+    //let beta_prime_point = proj256_generator() * Scalar::from(beta_prime);
+    //let expected_result = actual_product + beta_prime_point;
+
+
 }
