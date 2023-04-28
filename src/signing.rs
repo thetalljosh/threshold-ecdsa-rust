@@ -44,6 +44,7 @@ pub fn mta_protocol(private_key_shares: Vec<Scalar>, message: &str) {
         .iter()
         .map(|k| ProjectivePoint::generator() * k)
         .collect::<Vec<ProjectivePoint>>();
+    
 
     // 3 & 4. Compute combined public nonce R = sum(R_i)
     let combined_public_nonce = public_nonces

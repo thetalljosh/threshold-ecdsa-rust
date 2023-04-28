@@ -1,15 +1,15 @@
-use paillier::{EncryptionKey, KeyGeneration, Paillier};
+use paillier::{EncryptionKey, KeyGeneration, Paillier, DecryptionKey};
 
 use std::collections::HashMap;
 
 use k256::{
-    elliptic_curve::{rand_core::OsRng, Field},
+    elliptic_curve::{rand_core::OsRng, Field, PrimeField},
     AffinePoint, Scalar
 };
 
 use thiserror::Error;
 
-use crate::{feldman::*,generator::k256_generator, pedersen::*, signing::*};
+use crate::{feldman::*,generator::k256_generator, pedersen::*};
 pub type PartyIndex = u32;
 
 
@@ -26,7 +26,9 @@ pub struct Party {
     pub index: PartyIndex,
     pub public_key: Option<AffinePoint>,
     pub public_key_share: Option<AffinePoint>,
-    pub encrypted_shared_secret: Option<EncryptionKey>,
+    pub secret_share: Option<Scalar>,
+    pub encryption_key: Option<EncryptionKey>,
+    pub decryption_key: Option<DecryptionKey>,
 }
 
 pub struct VerifiableSS {
@@ -92,8 +94,8 @@ pub struct FinalState {
 }
 
 //Main Key generation function
-pub fn keygen(params: Parameters, parties: Vec<Party>) -> Result<FinalState, KeygenError> {
-    let initial_keys = generate_initial_keys(&params, &parties)?;
+pub fn keygen(params: Parameters,parties:&mut Vec<Party>) -> Result<FinalState, KeygenError> {
+    let initial_keys = generate_initial_keys(&params, parties)?;
     let (feldman_vss, secret_shares) = FeldmanVSS::share(
         params.threshold,
         params.num_parties,
@@ -102,12 +104,17 @@ pub fn keygen(params: Parameters, parties: Vec<Party>) -> Result<FinalState, Key
                 .secret_key
         ),
     );
+    // Update each party with their corresponding secret share
+    for (index, share) in secret_shares.clone().into_iter().enumerate() {
+        parties[index].secret_share = Some(share);
+        println!("Party {} share: {:?}\n", index, share);
+    }
     let feldman_vss_schemes = (feldman_vss, secret_shares.clone());
     let shared_secret = combine_shared_secrets(feldman_vss_schemes, initial_keys);
     let public_key = compute_public_key(&parties, &secret_shares)?;
     let final_state = FinalState {
         params,
-        parties,
+        parties: parties.to_vec(),
         shared_secret,
         public_key,
     };
@@ -117,40 +124,46 @@ pub fn keygen(params: Parameters, parties: Vec<Party>) -> Result<FinalState, Key
 //Perform the initial key generation to pass into feldman and pedersen functions
 fn generate_initial_keys(
     params: &Parameters,
-    parties: &Vec<Party>,
+    parties: &mut Vec<Party>,
 ) -> Result<HashMap<PartyIndex, PartyInitialKeys>, KeygenError> {
     let mut initial_keys = HashMap::new();
 
-    for party in parties {
+    parties.iter_mut().enumerate().for_each(|(i, party)| {
         let party_index = party.index;
         let mut csprng = OsRng;
-
+    
         let secret_key = Scalar::random(&mut csprng);
-        let public_key =k256_generator() * secret_key;
-
-        // *K256_GENERATORenerate a Pedersen commitment to the public key using the secret key as the blinding factor
+        let public_key = k256_generator() * secret_key;
+    
+        // Generate a Pedersen commitment to the public key using the secret key as the blinding factor
         let commitment_value = &public_key;
         let commitment = Committer::commit(&CommitmentValue(secret_key), &VerifierPublicKey(public_key));
-        // *K256_GENERATORenerate a Paillier key pair for the party
+        
+        // Generate a Paillier key pair for the party
         let paillier_keypair = Paillier::keypair();
-
-        // Save the secret key, public key, public key share, Paillier key pair, and Pedersen commitment for the party
+    
+        // Save the secret key, public_key, public key share, Paillier key pair, and Pedersen commitment for the party
         let party_initial_keys = PartyInitialKeys {
             secret_key,
             public_key: public_key.to_affine(),
-            paillier_keypair,
+            paillier_keypair: paillier_keypair.clone(),
             pedersen_commitment: commitment.0,
         };
-
+    
         initial_keys.insert(party_index, party_initial_keys);
-    }
+    
+        // Update the Party struct with the Paillier decryption key
+        party.encryption_key = Some(paillier_keypair.keys().0.clone());
+        party.decryption_key = Some(paillier_keypair.keys().1.clone());
+    });
+    
 
     Ok(initial_keys)
 }
 
 
 pub fn combine_shared_secrets(
-    feldman_vss: (FeldmanVSS, Vec<k256::Scalar>),
+    feldman_vss: (FeldmanVSS, Vec<Scalar>),
     initial_keys: HashMap<u32, PartyInitialKeys>,
 ) -> SharedSecret {
     let (vss, secret_shares) = feldman_vss;
