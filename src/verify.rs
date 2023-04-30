@@ -1,5 +1,5 @@
 use k256::{
-    AffinePoint, ProjectivePoint, Scalar, elliptic_curve::{sec1::ToEncodedPoint,PrimeField}
+    AffinePoint, ProjectivePoint, Scalar, elliptic_curve::{sec1::ToEncodedPoint,PrimeField, group::Curve}
 };
 use sha2::{Digest, Sha256};
 
@@ -26,8 +26,8 @@ pub fn is_valid(
     let c_times_a_plus_r = a * challenge + r;
 
     // Step 5: Verify that the two values computed in steps 3 and 4 are equal
-    println!("Check value 1: {:?}", s_times_g);
-    println!("Check value 2: {:?}", c_times_a_plus_r);
+    println!("Check value 1: {:?}", s_times_g.to_affine());
+    println!("Check value 2: {:?}", c_times_a_plus_r.to_affine());
 
     s_times_g.to_affine().eq(&c_times_a_plus_r.to_affine())
 

@@ -17,7 +17,6 @@ fn main() {
     };
 
     // Create a list of parties
-
     let mut parties = initialize_parties(params.num_parties);
 
     // Run the key generation process
@@ -26,12 +25,14 @@ fn main() {
     match keygen_result {
         Ok(final_state) => {
             parties.iter().enumerate().for_each(|(i, party)| {
+                /*
                 println!("Party {}:\n",party.index);
                 println!("Public key: {:?}",party.public_key);
                 println!("Public key share: {:?}", party.public_key_share);
                 println!("Paillier Encryption Key: {:?}",party.encryption_key);
                 println!("Paillier Decryption Key: {:?}",party.decryption_key);
                 println!("Party Secret Share: {:?}\n",party.secret_share);
+                */
             });
             println!("Key generation successful!");
             println!("Aggregated Private key: {:?}", final_state.shared_secret.value);
