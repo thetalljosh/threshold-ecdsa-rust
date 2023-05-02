@@ -1,11 +1,13 @@
 use std::ops::Mul;
 
-use k256::{Scalar, ProjectivePoint, elliptic_curve::{rand_core::OsRng, Field}, Secp256k1, schnorr::{Error, self}, AffinePoint};
-use serde::{Serialize, Deserialize};
+use k256::{
+    elliptic_curve::{rand_core::OsRng, Field},
+    schnorr::{self, Error},
+    AffinePoint, ProjectivePoint, Scalar, Secp256k1,
+};
+use serde::{Deserialize, Serialize};
 
-use crate::{k256_generator};
-
-
+use crate::k256_generator;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ShamirSecretSharing {
@@ -70,7 +72,6 @@ impl FeldmanVSS {
     }
 
     pub fn sample_polynomial(t: usize, coef0: &Scalar) -> Vec<Scalar> {
-
         let mut rng = OsRng;
 
         let mut coefficients = vec![*coef0];
@@ -79,10 +80,14 @@ impl FeldmanVSS {
         coefficients
     }
 
-
     pub fn evaluate_polynomial(coefficients: &[Scalar], index_vec: &[usize]) -> Vec<Scalar> {
         (0..index_vec.len())
-            .map(|point| FeldmanVSS::mod_evaluate_polynomial(coefficients, Scalar::from(index_vec[point] as u32)))
+            .map(|point| {
+                FeldmanVSS::mod_evaluate_polynomial(
+                    coefficients,
+                    Scalar::from(index_vec[point] as u32),
+                )
+            })
             .collect::<Vec<Scalar>>()
     }
 
@@ -95,11 +100,12 @@ impl FeldmanVSS {
     }
 
     pub fn reconstruct(&self, indices: &[usize], shares: &[Scalar]) -> Scalar {
-   
-        let points = indices.iter().map(|i| Scalar::from(*i as u32 + 1)).collect::<Vec<_>>();
+        let points = indices
+            .iter()
+            .map(|i| Scalar::from(*i as u32 + 1))
+            .collect::<Vec<_>>();
         FeldmanVSS::lagrange_interpolation_at_zero(&points, &shares)
     }
-    
 
     /// Performs a Lagrange interpolation in field Zp at the origin
     /// for a polynomial defined by `points` and `values`.
@@ -110,17 +116,17 @@ impl FeldmanVSS {
     pub fn lagrange_interpolation_at_zero(points: &[Scalar], values: &[Scalar]) -> Scalar {
         // Ensure the length of points and values is the same
         assert_eq!(points.len(), values.len());
-    
+
         let n = points.len();
         let mut acc = Scalar::ZERO;
-    
+
         // Perform Lagrange interpolation
         for i in 0..n {
             let xi = &points[i];
             let yi = &values[i];
             let mut num: Scalar = Scalar::from(1 as u32);
             let mut den: Scalar = Scalar::from(1 as u32);
-    
+
             for j in 0..n {
                 if i != j {
                     let xj = &points[j];
@@ -134,17 +140,12 @@ impl FeldmanVSS {
             // Add the term for this index to the accumulator
             acc += yi * &num * den_inv;
         }
-    
+
         // Return the reconstructed secret key
         acc
     }
-    
 
-    pub fn validate_share(
-        &self,
-        secret_share: &Scalar,
-        index: usize,
-    ) -> Result<(), Error> {
+    pub fn validate_share(&self, secret_share: &Scalar, index: usize) -> Result<(), Error> {
         let ss_point = k256_generator() * secret_share;
         self.validate_share_public(&ss_point, index)
     }
@@ -166,7 +167,6 @@ impl FeldmanVSS {
         }
     }
 
-
     pub fn get_point_commitment(&self, index: usize) -> AffinePoint {
         let mut comm_iterator = self.commitments.iter().rev();
         let head = comm_iterator.next().unwrap();
@@ -175,10 +175,8 @@ impl FeldmanVSS {
         let comm_to_point = tail.fold(head.clone(), |acc, x| *x + acc * index_fe);
         comm_to_point.into()
     }
-    
 
-    //compute \lambda_{index,S}, a lagrangian coefficient that change the (t,n) scheme to (|S|,|S|)
-    // used in http://stevengoldfeder.com/papers/k256_generator()k256_generator()18.pdf
+    // Compute \lambda_{index,S}, a Lagrangian coefficient that changes the (t,n) scheme to (|S|,|S|)
     pub fn map_share_to_new_params(&self, index: u32, s: &[usize]) -> Scalar {
         let s_len = s.len();
         let num: Scalar = Scalar::from(1 as u32);
@@ -187,7 +185,7 @@ impl FeldmanVSS {
         let points = (0..self.parameters.share_count)
             .map(|i| ((i as u32) + 1))
             .collect::<Vec<_>>();
-        
+
         let xi = points[index as usize];
         let num = (0..s_len).fold(num, |acc, i| {
             if s[i] != index as usize {
@@ -196,16 +194,16 @@ impl FeldmanVSS {
                 acc
             }
         });
-        let denum = (0..s_len).fold(den, |acc, i| {
-            if s[i] != index as usize {
-                let xj_sub_xi = points[s[i]] - xi;
+        let denum = (0..s_len).fold(den, |acc, j| {
+            // Changed variable from i to j
+            if s[j] != index as usize {
+                let xj_sub_xi = points[s[j]] - xi; // Changed variable from i to j
                 acc.mul(Scalar::from(xj_sub_xi))
             } else {
                 acc
             }
         });
-    
+
         num * denum.invert().unwrap()
     }
-    
 }

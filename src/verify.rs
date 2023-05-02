@@ -1,5 +1,5 @@
 use k256::{
-    AffinePoint, ProjectivePoint, Scalar, elliptic_curve::{sec1::ToEncodedPoint,PrimeField, group::Curve}
+    AffinePoint, ProjectivePoint, Scalar, elliptic_curve::{sec1::ToEncodedPoint,PrimeField}
 };
 use sha2::{Digest, Sha256};
 
@@ -20,7 +20,7 @@ pub fn is_valid(
     let challenge: &k256::Scalar = &k256::Scalar::from_repr_vartime(hasher.finalize()).unwrap();
 
     // Step 3: Calculate s * G
-    let s_times_g = ProjectivePoint::generator() * s;
+    let s_times_g = ProjectivePoint::GENERATOR * s;
 
     // Step 4: Calculate c * A + R
     let c_times_a_plus_r = a * challenge + r;

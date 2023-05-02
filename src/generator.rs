@@ -1,5 +1,4 @@
 use k256::{AffinePoint, ProjectivePoint, Scalar, elliptic_curve::{rand_core::OsRng, Field}};
-use num_bigint::BigInt;
 
 pub fn k256_generator() -> AffinePoint {
 AffinePoint::GENERATOR

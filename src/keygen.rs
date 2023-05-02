@@ -3,7 +3,7 @@ use paillier::{DecryptionKey, EncryptionKey, KeyGeneration, Paillier};
 use std::collections::HashMap;
 
 use k256::{
-    elliptic_curve::{group::prime::PrimeCurveAffine, rand_core::OsRng, Field, PrimeField},
+    elliptic_curve::{rand_core::OsRng, Field},
     AffinePoint, Scalar,
 };
 
@@ -14,6 +14,7 @@ pub type PartyIndex = u32;
 
 #[derive(Debug, Clone)]
 
+// Parameters for the threshold ECDSA protocol
 pub struct Parameters {
     pub threshold: usize,
     pub num_parties: usize,
@@ -21,6 +22,7 @@ pub struct Parameters {
 }
 
 #[derive(Debug, Clone)]
+// Represents a single party in the threshold ECDSA protocol
 pub struct Party {
     pub index: PartyIndex,
     pub public_key: Option<AffinePoint>,
@@ -94,13 +96,14 @@ pub struct FinalState {
 
 //Main Key generation function
 pub fn keygen(params: Parameters, parties: &mut Vec<Party>) -> Result<FinalState, KeygenError> {
+    // Generate the initial keys (Gennaro and Goldfeder Step 1)
+    // including secret keys, public keys, Paillier key pairs, and Pedersen commitments
     let initial_keys = generate_initial_keys(&params, parties)?;
 
-    //let feldman_vss_schemes = (feldman_vss, secret_shares.clone());
     // Initialize a HashMap to store the Feldman VSS schemes and secret shares for each party
     let mut feldman_vss_schemes: HashMap<PartyIndex, (FeldmanVSS, Vec<Scalar>)> = HashMap::new();
 
-    // Iterate through all parties to create and share the Feldman VSS
+    // Create Feldman VSS schemes for each party and distribute the secret shares (Gennaro and Goldfeder Step 2)
     let mut all_secret_shares: Vec<Scalar> = vec![];
 
     for party_index in 1..=params.num_parties as PartyIndex {
@@ -109,16 +112,16 @@ pub fn keygen(params: Parameters, parties: &mut Vec<Party>) -> Result<FinalState
             params.num_parties,
             &k256::Scalar::from(initial_keys[&party_index].secret_key),
         );
-        feldman_vss_schemes.insert(party_index, (feldman_vss, secret_shares.clone()));
-            // Iterate through all parties to verify the received shares
-    for (party_index, (feldman_vss, secret_shares)) in feldman_vss_schemes.iter() {
+        feldman_vss_schemes.insert(party_index, (feldman_vss.clone(), secret_shares.clone()));
+        all_secret_shares.extend(secret_shares.clone());
+
+        // Validate the received shares for each party (Gennaro and Goldfeder Step 3)
         for share_index in 1..=params.num_parties as usize {
             let share = secret_shares[share_index - 1];
-            feldman_vss.validate_share(&share, share_index);  
+            feldman_vss.validate_share(&share, share_index);
         }
     }
-        all_secret_shares.extend(secret_shares.clone());
-    }
+
     // Update each party with their corresponding secret share
     for party in parties.iter_mut() {
         let party_index = party.index as usize;
@@ -126,8 +129,9 @@ pub fn keygen(params: Parameters, parties: &mut Vec<Party>) -> Result<FinalState
         party.secret_share = Some(secret_share);
         println!("Party {} share: {:?}\n", party_index, secret_share);
     }
-
+    // Combine the secret shares to obtain the shared secret (Gennaro and Goldfeder Step 4)
     let shared_secret = combine_shared_secrets(all_secret_shares, initial_keys);
+    // Compute the final aggregated public key (Gennaro and Goldfeder Step 5)
     let public_key = compute_public_key(&parties)?;
     let final_state = FinalState {
         params,
@@ -209,47 +213,3 @@ pub fn compute_public_key(parties: &[Party]) -> Result<AffinePoint, KeygenError>
     }
     Ok(public_key.to_affine())
 }
-
-
-/*
-pub fn combine_shared_secrets(
-    feldman_vss: (FeldmanVSS, Vec<Scalar>),
-    initial_keys: HashMap<u32, PartyInitialKeys>,
-) -> SharedSecret {
-    let (vss, secret_shares) = feldman_vss;
-    let num_shares = vss.parameters.share_count;
-
-    // Extract the secret shares and their indices
-    let shares = secret_shares
-        .into_iter()
-        .enumerate()
-        .map(|(index, share)| (index, share))
-        .collect::<Vec<(usize, Scalar)>>();
-
-    // Reconstruct the shared secret using the FeldmanVSS implementation
-    let shared_secret = vss.reconstruct(
-        &shares.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
-        &shares.iter().map(|(_, share)| *share).collect::<Vec<_>>(),
-    );
-
-    SharedSecret {
-        value: shared_secret,
-    }
-}
-
-
-pub fn compute_public_key(
-    parties: &[Party],
-    secret_shares: &Vec<Scalar>,
-) -> Result<AffinePoint, KeygenError> {
-    let base_point = k256_generator();
-    let mut public_key = base_point * Scalar::from(0 as u32);
-
-    for (index, secret_share) in secret_shares.iter().enumerate() {
-        public_key += base_point * secret_share;
-    }
-
-    Ok(public_key.to_affine())
-}
-*/
-
