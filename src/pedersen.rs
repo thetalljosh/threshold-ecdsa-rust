@@ -1,8 +1,9 @@
 use crate::k256_generator;
 use k256::{
-    elliptic_curve::{rand_core::OsRng, Field},
+    elliptic_curve::{rand_core::OsRng, Field, PrimeField},
     ProjectivePoint, Scalar,
 };
+use sha2::{Digest, Sha256};
 
 pub struct Commitment(ProjectivePoint);
 
@@ -27,9 +28,18 @@ impl CommitmentValue {
 }
 
 impl CommitVerifier {
+    // Create a deterministic verifier with a fixed public key derived from a known hash
+    // This ensures all parties use the same commitment scheme
     pub fn init() -> (VerifierPublicKey, Self) {
-        let mut csprng = OsRng;
-        let a = Scalar::random(&mut csprng);
+        // Use a deterministic derivation: H = hash("pedersen-commitment-base") * G
+        // This ensures all parties compute the same H value
+        use sha2::{Digest, Sha256};
+        use k256::elliptic_curve::PrimeField;
+        
+        let mut hasher = Sha256::new();
+        hasher.update(b"pedersen-commitment-base-point-v1");
+        let hash_output = hasher.finalize();
+        let a = Scalar::from_repr_vartime(hash_output).unwrap_or(Scalar::ONE);
         let H = k256_generator() * a;
         let pub_key = VerifierPublicKey(H);
         (

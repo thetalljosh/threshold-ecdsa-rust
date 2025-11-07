@@ -45,21 +45,45 @@ fn main() {
                 final_state.shared_secret.value
             );
             println!("Aggregated Public key: {:?}\n", final_state.public_key);
+
+            // Extract the private key shares from a threshold subset of parties (3 out of 5)
+            // Using parties at indices 1, 2, and 3 (0-based: parties[1], parties[2], parties[3])
+            // This demonstrates that any t parties can sign without needing all n parties
+            let signing_parties_indices = vec![1, 2, 3]; // Parties 2, 3, 4 in 1-based indexing
+            let private_key_shares = signing_parties_indices
+                .iter()
+                .filter_map(|&idx| parties[idx].secret_share)
+                .collect::<Vec<_>>();
+
+            // Extract Paillier encryption and decryption keys for MTA protocol
+            let encryption_keys = signing_parties_indices
+                .iter()
+                .filter_map(|&idx| parties[idx].encryption_key.clone())
+                .collect::<Vec<_>>();
+
+            let decryption_keys = signing_parties_indices
+                .iter()
+                .filter_map(|&idx| parties[idx].decryption_key.clone())
+                .collect::<Vec<_>>();
+
+            println!(
+                "Signing with {} out of {} parties (indices: {:?})\n",
+                private_key_shares.len(),
+                params.num_parties,
+                signing_parties_indices
+                    .iter()
+                    .map(|&i| i + 1)
+                    .collect::<Vec<_>>()
+            );
+
+            // Execute the MTA protocol to sign the message using the private key shares
+            // Now includes Paillier keys for secure multiplicative-to-additive conversion
+            mta_protocol(private_key_shares, encryption_keys, decryption_keys, message);
         }
         Err(e) => {
             println!("Key generation failed: {}", e);
         }
     }
-
-    // Extract the private key shares from a subset of parties (3 out of 5 in this case) to demonstrate the threshold signing
-    let private_key_shares = parties[1..4]
-        .iter()
-        .filter_map(|party| party.secret_share.as_ref())
-        .cloned()
-        .collect();
-
-    // Execute the MTA protocol to sign the message using the private key shares
-    mta_protocol(private_key_shares, message);
 }
 
 // Initialize a Vec of Party structs with the given number of parties

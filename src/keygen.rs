@@ -130,7 +130,7 @@ pub fn keygen(params: Parameters, parties: &mut Vec<Party>) -> Result<FinalState
         println!("Party {} share: {:?}\n", party_index, secret_share);
     }
     // Combine the secret shares to obtain the shared secret (Gennaro and Goldfeder Step 4)
-    let shared_secret = combine_shared_secrets(all_secret_shares, initial_keys);
+    let shared_secret = combine_shared_secrets(parties, params.num_parties);
     // Compute the final aggregated public key (Gennaro and Goldfeder Step 5)
     let public_key = compute_public_key(&parties)?;
     let final_state = FinalState {
@@ -149,6 +149,9 @@ fn generate_initial_keys(
 ) -> Result<HashMap<PartyIndex, PartyInitialKeys>, KeygenError> {
     let mut initial_keys = HashMap::new();
 
+    // Create a deterministic shared verifier public key for Pedersen commitments
+    let (shared_verifier_pk, _) = CommitVerifier::init();
+
     parties.iter_mut().enumerate().for_each(|(i, party)| {
         let party_index = party.index;
         let mut csprng = OsRng;
@@ -159,9 +162,10 @@ fn generate_initial_keys(
         let public_key = k256_generator() * secret_key;
 
         // Generate a Pedersen commitment to the public key using the secret key as the blinding factor
+        // All parties now use the same deterministic verifier public key
         let commitment_value = &public_key;
         let commitment =
-            Committer::commit(&CommitmentValue(secret_key), &VerifierPublicKey(public_key));
+            Committer::commit(&CommitmentValue(secret_key), &shared_verifier_pk);
 
         // Generate a Paillier key pair for the party
         let paillier_keypair = Paillier::keypair();
@@ -186,15 +190,20 @@ fn generate_initial_keys(
 }
 
 pub fn combine_shared_secrets(
-    secret_shares: Vec<Scalar>,
-    initial_keys: HashMap<u32, PartyInitialKeys>,
+    parties: &Vec<Party>,
+    num_parties: usize,
 ) -> SharedSecret {
     let mut shared_secret = Scalar::from(0 as u32);
 
-    for (_, party_initial_keys) in initial_keys {
-        shared_secret += party_initial_keys.secret_key;
+    // Aggregate the distributed secret shares (one per party)
+    // Each party has received shares from all other parties via Feldman VSS
+    // The sum of all shares at index i gives party i's final share of the secret
+    for party in parties {
+        if let Some(share) = party.secret_share {
+            shared_secret += share;
+        }
     }
-    //println!("Aggregated Shared Secret: {:?}", shared_secret);
+    
     SharedSecret {
         value: shared_secret,
     }
