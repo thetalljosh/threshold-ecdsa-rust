@@ -1,0 +1,16 @@
+[package]
+name = "chat-core"
+version = "0.1.0"
+edition = "2021"
+description = "Security-first Nostr NIP-17 private chat core library"
+license = "MIT"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+zeroize = { workspace = true }
+nostr = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
